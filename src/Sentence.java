@@ -38,7 +38,7 @@ public class Sentence {
             sb.append(tokens.get(i));
             sb.append(' ');
         }
-        sb.append(tokens.getLast());
+        sb.append(tokens.get(tokens.size() - 1));
         return String.format(sb.toString());
     }
 }
