@@ -4,20 +4,25 @@ import java.util.*;
 
 public class ibm1 {
 
-    private Random r = new Random();
+    private Random r = new Random(10);
     private final int NULL_WORD = 0;
     private final int NULL_LINK = 0xFFFF;
     private final double NULL_PRIOR = 0.2; // this seems to be what's used in eflomal
     private final double LEX_ALPHA = 0.001;
     private final double NULL_ALPHA = 0.001;
-    private ArrayList<ArrayList<Integer>> links = new ArrayList<>(); // using ArrayList for vector and Integer for all ints
+    private ArrayList<ArrayList<Integer>> links = new ArrayList<>();
     private int maxLines = 10000;
     private ArrayList<SentencePair> corpus = new ArrayList<>();
     private TreeMap<MutablePair<Integer, Integer>, Integer> counts = new TreeMap<>();
     private ArrayList<TreeMap<Integer, Double>> dirichlet = new ArrayList<>();
-    private ArrayList<TreeMap<Integer, Double>> priors = new ArrayList<>(); // TODO: what is this? It's never updated
+    private ArrayList<TreeMap<Integer, Double>> priors = new ArrayList<>();
 
-    private boolean argmax = false; // TODO: what is this? what should this be?
+    private boolean argmax = false;
+
+    public ibm1(String filename) {
+        readSrcTrg(filename);
+        initializeLinksAndCounts();
+    }
 
     public void readSrcTrg(String filename) {
 
@@ -53,10 +58,7 @@ public class ibm1 {
     }
 
 
-    public void ibm1(String filename) {
-
-        readSrcTrg(filename);
-        initializeLinksAndCounts();
+    public void alignCorpusOnce() {
 
         for (int k = 0; k < corpus.size(); k++) {
             Sentence S = corpus.get(k).getSource();
@@ -66,9 +68,14 @@ public class ibm1 {
                 // get the word index in the source sentence that previously mapped to this word
                 int old_i = links.get(k).get(j); // word index of the src word from src sentence it maps to
                 // get that word token from the source sentence
-                int old_s = S.get(old_i);
+                int old_s = -1;
+                if (old_i == NULL_LINK) {
+                    old_s = NULL_WORD;
+                } else {
+                    old_s = S.get(old_i);
+                }
                 MutablePair<Integer, Integer> pairToUpdate = new MutablePair<>(t, old_s);
-                if (counts.containsKey(pairToUpdate)) { // this should always be true...
+                if (counts.containsKey(pairToUpdate)) { // this should always be true
                     if (counts.get(pairToUpdate) <= 1) {
                         // if counts reaches 0 clear these entries for RAM
                         counts.remove(pairToUpdate);
@@ -79,14 +86,14 @@ public class ibm1 {
                         // decrease the count and dirichlet prior of the word old_s
                         counts.put(pairToUpdate, counts.get(pairToUpdate) - 1);
                         double dirichletVal = LEX_ALPHA; // handle case where dirichlet is null
-                        if (dirichlet.size() > t && dirichlet.get(t) != null && dirichlet.get(t).containsKey(old_i)) {
-                            dirichletVal = dirichlet.get(t).get(old_i);
+                        if (dirichlet.size() > t && dirichlet.get(t) != null && dirichlet.get(t).containsKey(old_s)) {
+                            dirichletVal = dirichlet.get(t).get(old_s);
                         }
                         double newDirichletVal = 1 / (1 / dirichletVal - 1);
                         if (dirichlet.size() <= t) {
-                            dirichlet.add(t, new TreeMap<>());
-                        } else if (dirichlet.get(t) == null) {
-                            dirichlet.set(t, new TreeMap<>());
+                            while (dirichlet.size() <= t) {
+                                dirichlet.add(dirichlet.size(), new TreeMap<>());
+                            }
                         }
                         dirichlet.get(t).put(old_s, newDirichletVal);
                     }
@@ -139,10 +146,10 @@ public class ibm1 {
                 // identify the word token that goes with this sentence index
                 if (new_i < S.size()) {
                     new_s = S.get(new_i);
-                    links.get(k).set(j, new_i);
+                    links.get(k).set(j, new_i); // change from pseudocode
                 } else {
                     new_s = NULL_WORD;
-                    links.get(k).set(j, NULL_LINK);
+                    links.get(k).set(j, NULL_LINK); // change from pseudocode
                 }
 
                 // increase the count and dirichlet variables to reflect the new i and s
@@ -158,67 +165,28 @@ public class ibm1 {
                 }
                 double newDirichletVal = 1 / (1 / dirichletVal + 1);
                 if (dirichlet.size() <= t) {
-                    dirichlet.add(t, new TreeMap<>());
+                    while (dirichlet.size() <= t) {
+                        dirichlet.add(dirichlet.size(), new TreeMap<>());
+                    }
                 } else if (dirichlet.get(t) == null) {
                     dirichlet.set(t, new TreeMap<>());
                 }
                 dirichlet.get(t).put(new_s, newDirichletVal);
             }
         }
+    }
 
-        TreeMap<MutablePair<Integer, Integer>, Integer> sortedCounts = sortByValuesMax(counts);
-        ArrayList<TreeMap> sortedDirichlet = new ArrayList<>();
-        for (int i = 0; i < dirichlet.size(); i++) {
-            if (dirichlet.get(i) != null) {
-                sortedDirichlet.add(i, sortByValuesMin(dirichlet.get(i)));
-            }
+    public void runAlignmentALot() {
+        TreeMap<MutablePair<Integer, Integer>, Integer> sortedCounts;
+        for (int i = 1; i < 20000; i++) {
+            alignCorpusOnce();
         }
-    }
-
-    public static <K, V extends Comparable<V>> TreeMap<K, V>
-    sortByValuesMax(final Map<K, V> map) {
-        Comparator<K> valueComparator =
-                new Comparator<K>() {
-                    public int compare(K k1, K k2) {
-                        int compare =
-                                map.get(k1).compareTo(map.get(k2));
-                        if (compare == 0)
-                            return 1;
-                        else
-                            return compare;
-                    }
-                };
-
-        TreeMap<K, V> sortedByValues =
-                new TreeMap<K, V>(valueComparator.reversed());
-        sortedByValues.putAll(map);
-        return sortedByValues;
-    }
-
-    public static <K, V extends Comparable<V>> TreeMap<K, V>
-    sortByValuesMin(final Map<K, V> map) {
-        Comparator<K> valueComparator =
-                new Comparator<K>() {
-                    public int compare(K k1, K k2) {
-                        int compare =
-                                map.get(k1).compareTo(map.get(k2));
-                        if (compare == 0)
-                            return 1;
-                        else
-                            return compare;
-                    }
-                };
-
-        TreeMap<K, V> sortedByValues =
-                new TreeMap<K, V>(valueComparator);
-        sortedByValues.putAll(map);
-        return sortedByValues;
     }
 
     private int max_categorical_from_cumulative(ArrayList<Double> ps) {
         double best_p = ps.get(0);
         int new_i = 0;
-        for (int i = 1; i < ps.size(); i++) { // TODO: not sure about upper bound for i
+        for (int i = 1; i < ps.size(); i++) {
             double p = ps.get(i) - ps.get(i - 1);
             if (p > best_p) {
                 new_i = i;

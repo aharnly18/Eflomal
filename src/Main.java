@@ -1,10 +1,17 @@
+import org.apache.commons.lang3.tuple.MutablePair;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.TreeMap;
+
 public class Main {
     public static void main(String[] args) {
-        String filename = "piglatin_v2.zip";
+        String filename = "piglatin_v0.zip";
 //                String filename = "sl-en.zip";
 //        String filename = "fr-en.zip";
-        ibm1 ibm1 = new ibm1();
-        ibm1.ibm1(filename);
+        ibm1 ibm1 = new ibm1(filename);
+        ibm1.runAlignmentALot();
 
 
 //        SentencePairReader reader = new SentencePairReader(filename, false);
